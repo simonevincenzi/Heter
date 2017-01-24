@@ -148,25 +148,30 @@ fit.models=function()
   Phi.dot=list(formula = ~1)
   Phi.het.bs=list(formula = ~bs(heter))
   Phi.het.lm =list(formula = ~ heter)
+  Phi.Coh.het.bs.ad=list(formula = ~ Coh_n + bs(heter))
+  Phi.Coh.het.lm.mu =list(formula = ~ Coh_n * heter)
   Phi.het.Season.mu = list(formula = ~ heter * Season)
   Phi.het.Season.ad = list(formula = ~ heter + Season)
   Phi.het.Season.mu.bs = list(formula = ~ bs(heter) * Season)
-  Phi.het.Season.add.bs = list(formula = ~ bs(heter) + Season)
+  Phi.het.Season.ad.bs = list(formula = ~ bs(heter) + Season)
+  Phi.Coh.het.Season.ad.mu.bs = list(formula = ~ Coh_n + bs(heter) * Season)
+  Phi.Coh.het.Season.ad.bs = list(formula = ~ Coh_n* bs(heter) + Season)
   Phi.Season = list(formula = ~ Season)
+  Phi.Coh.Season.mu = list(formula = ~ Coh_n * Season)
+  Phi.Coh.Season.ad = list(formula = ~ Coh_n + Season)
   
-  
-  p.Age= list(formula=~1)
+  p.Age= list(formula=~bs(Age))
   ##
   cml=create.model.list(c("Phi","p"))
   results=crm.wrapper(cml,data=data.proc, ddl=ddl,
                       external=FALSE,accumulate=FALSE, hessian = T, use.admb = F)
   return(results)
 }
-test.heter=fit.models()
-ddl.heter = ddl
+uppidri.mod.heter=fit.models()
+uppidri.mod.ddl.heter = ddl
 
 
-test.heter.mod = predict(test.heter[[2]],ddl = ddl.heter,se = T)
+test.heter.mod = predict(uppidri.mod.heter[[8]],ddl = uppidri.mod.ddl.heter,se = T)
 #######
 ### PLOT
 

@@ -148,25 +148,32 @@ fit.models=function()
   Phi.dot=list(formula = ~1)
   Phi.het.bs=list(formula = ~bs(heter))
   Phi.het.lm =list(formula = ~ heter)
+  Phi.Coh.het.bs.ad=list(formula = ~ Coh_n + bs(heter))
+  Phi.Coh.het.lm.mu =list(formula = ~ Coh_n * heter)
   Phi.het.Season.mu = list(formula = ~ heter * Season)
   Phi.het.Season.ad = list(formula = ~ heter + Season)
   Phi.het.Season.mu.bs = list(formula = ~ bs(heter) * Season)
-  Phi.het.Season.add.bs = list(formula = ~ bs(heter) + Season)
+  Phi.het.Season.ad.bs = list(formula = ~ bs(heter) + Season)
+  Phi.Coh.het.Season.ad.mu.bs = list(formula = ~ Coh_n + bs(heter) * Season)
+  Phi.Coh.het.Season.ad.bs = list(formula = ~ Coh_n* bs(heter) + Season)
   Phi.Season = list(formula = ~ Season)
+  Phi.Coh.Season.mu = list(formula = ~ Coh_n * Season)
+  Phi.Coh.Season.ad = list(formula = ~ Coh_n + Season)
   
   
-  p.Age= list(formula=~1)
+  p.Age= list(formula=~bs(Age))
+  
   ##
   cml=create.model.list(c("Phi","p"))
   results=crm.wrapper(cml,data=data.proc, ddl=ddl,
                       external=FALSE,accumulate=FALSE, hessian = T, use.admb = F)
   return(results)
 }
-test.heter=fit.models()
-ddl.heter = ddl
+loidri.mod.heter=fit.models()
+loidri.mod.ddl.heter = ddl
 
 
-test.heter.mod = predict(test.heter[[5]],ddl = ddl.heter,se = T)
+test.heter.mod = predict(loidri.mod.heter[[8]],ddl = loidri.mod.ddl.heter,se = T)
 #######
 ### PLOT
 
@@ -189,7 +196,7 @@ colour.line = "gray50"
 label.T = "Heterozygosity" 
 
 
-test.gg <- ggplot(test.heter.mod$Phi, aes(y = estimate, x = heter, group = Season)) + 
+test.gg <- ggplot(test.heter.mod$Phi, aes(y = estimate, x = heter)) + 
   geom_line(lwd  = line.lwd) + 
   geom_errorbar(aes(ymin = lcl, ymax = ucl),width = 0.01, col = "gray40", lty = 2) + 
   theme(plot.title = element_text(lineheight=.8, face="bold", size = size.title), 

@@ -4,7 +4,10 @@ library(R2admb)
 library(splines)
 library(dplyr)
 
-
+rm(data_df)
+rm(annual)
+rm(data.marked)
+rm(data.prov)
 
 annual = 1
 #zak_df = readRDS("zak_df.RDS")
@@ -13,7 +16,35 @@ zak_df = arrange(zak_df, Mark_cor, Year, Month)
 
 zak_df$Mark_cor[which(zak_df$Mark_cor == "snakelike")] = zak_df$Mark[which(zak_df$Mark_cor == "snakelike")]
 
-data = filter(zak_df, !is.na(heter))
+data_df = filter(zak_df, !is.na(heter))
+
+
+#### Cohort pre and post flood
+
+data_df$Coh.p = ifelse(data_df$Cohort == "P", "P", "O")
+
+Coh.p.levels = c("P","O")
+
+data_df$Coh.p = factor(data_df$Coh.p, levels = Coh.p.levels)
+
+data_df$Coh.pflood = rep(0,nrow(data_df))
+
+for (i in 1:nrow(data_df)) {
+  
+  if (data_df$Cohort[i] == "P") {
+    
+    data_df$Coh.pflood[i] = "P" } else if (data_df$Cohort[i] %in% c("C98","C99","C00","C01","C02",
+                                                              "C03","C04","C05","C06")) {
+      
+      data_df$Coh.pflood[i] = "Pre" } else { data_df$Coh.pflood[i] = "Post"}}
+
+Coh.pflood.levels = c("P","Pre","Post")
+
+data_df$Coh.pflood = factor(data_df$Coh.pflood,levels = Coh.pflood.levels)
+
+levels(data_df$Coh.pflood) = c("Pre","Pre","Post")
+
+
 
 minyear= 1996
 maxyear = 2014
@@ -35,11 +66,11 @@ data.marked$Coh = 0 # Cohort (number)
 data.marked$heter = 0
 
 
-unique.mark.data = with(data,unique(Mark_cor))
+unique.mark.data = with(data_df,unique(Mark_cor))
 
 for (i in 1:length(unique.mark.data)) {
   
-  data.prov = subset(data,Mark_cor == unique.mark.data[i])
+  data.prov = subset(data_df,Mark_cor == unique.mark.data[i])
   
   year.prov = data.prov$Year
   
@@ -53,6 +84,8 @@ for (i in 1:length(unique.mark.data)) {
   data.marked[i,"Coh"] = data.prov$Cohort_cor[1] ## Cohort of the fish as number
   
   data.marked[i,"Coh_n"] = as.character(data.prov$Cohort_cor[1])
+  
+  data.marked[i,"Coh.pflood"] = as.character(data.prov$Coh.pflood[1])
   
   data.marked[i,"heter"] = data.prov$heter[1]
   
@@ -74,14 +107,14 @@ data.marked = data.marked[,-c(2:(ncolonne+1))]
 colnames(data.marked)[1] = "Mark"
 
 if (annual == 0) {
-  spacebwtime = rep(12,length(unique(data$Year))-1)} else {spacebwtime = rep(1,length(unique(data$Year))-1)}
+  spacebwtime = rep(12,length(unique(data_df$Year))-1)} else {spacebwtime = rep(1,length(unique(data_df$Year))-1)}
 
 
 col.spacebwtime = c(1,cumsum(spacebwtime)+1)
 
 ##add a Flood variable
 
-flood.rep = rep(0,length(unique(data$Year)))
+flood.rep = rep(0,length(unique(data_df$Year)))
 
 flood.rep[12] = 1  # Flood occurred in 2007
 
@@ -95,8 +128,8 @@ data.marked=cbind(data.marked,Flood)
 
 #####
 
-design.Phi=list(static=c("heter","Coh_n"), time.varying = ("Flood"))
-design.p=list(static=c("heter","Coh_n"), time.varying = ("Flood"))
+design.Phi=list(static=c("heter","Coh_n","Coh.pflood"), time.varying = ("Flood"))
+design.p=list(static=c("heter","Coh_n","Coh.pflood"), time.varying = ("Flood"))
 design.parameters=list(Phi=design.Phi,p=design.p)
 data.proc=process.data(data.marked, model = "CJS", time.interval = spacebwtime)
 ddl=make.design.data(data.proc,parameters=design.parameters)
@@ -110,37 +143,24 @@ fit.models=function()
   Phi.dot=list(formula = ~1)
   Phi.int.rel.bs=list(formula = ~bs(heter))
   Phi.int.rel.lm =list(formula = ~ heter)
-  # Phi.int.rel.bs.time=list(formula = ~bs(heter) + time)
-  # Phi.int.rel.lm.time =list(formula = ~ heter + time)
-  Phi.int.rel.bs.Flood=list(formula = ~bs(heter) + Flood)
-  Phi.int.rel.lm.Flood =list(formula = ~ heter + Flood)
-  #Phi.Coh.Flood.Temp.mult=list(formula=~Coh_n*Flood*Temperature)
-  #Phi.Coh.Flood.Temp.add=list(formula=~Coh_n+Flood+Temperature)
-  #Phi.Sex=list(formula=~Sex)
-  #Phi.Sex.Age.mult=list(formula=~Sex*Age)
-  #Phi.Sex.Age.add=list(formula=~Sex+Age)
-  #Phi.linf = list(formula=~linf)
-  #Phi.expL3 = list(formula=~expL3)
-  #Phi.expL2 = list(formula=~expL2)
-  #Phi.expL1 = list(formula=~expL1)
-  #Phi.age=list(formula=~age)
-  #p.dot=list(formula=~1)
-  #p.Density = list(formula = ~ Density)
-  #p.Coh=list(formula=~Coh_n)
-  #p.Flood=list(formula=~Flood)
-  #p.Sex=list(formula=~Sex)
-  #p.time=list(formula=~time)
- # p.dot=list(formula=~1)
-  p.time = list(formula = ~time)
-  #p.Age.bs=list(formula=~bs(Age))
+  Phi.het.Flood.add.bs=list(formula = ~bs(heter) + Flood)
+  Phi.heter.Flood.add =list(formula = ~ heter + Flood)
+  Phi.Coh.p.flood.heter.Flood.ad=list(formula = ~ heter + Coh.pflood + Flood)
+  Phi.Coh.p.flood.heter.Flood.mu=list(formula = ~ heter * Coh.pflood + Flood)
+  Phi.Coh.p.flood.Flood.heter.ad=list(formula = ~ Coh.pflood + Flood)
+  Phi.Coh.p.flood.Flood.mu=list(formula = ~ Coh.pflood * Flood)
+  Phi.Flood=list(formula = ~ Flood)
+  
+  p.Age = list(formula = ~Age)
+  
   cml=create.model.list(c("Phi","p"))
   results=crm.wrapper(cml,data=data.proc, ddl=ddl,
                       external=FALSE,accumulate=FALSE, hessian = T,  burnin=1000,iter=5000)
   return(results)
 }
-test.heter=fit.models()
-ddl.heter = ddl
-test.heter.mod = predict(test.heter[[5]], ddl = ddl.heter, se = T)
+zak.mod.heter=fit.models()
+zak.mod.ddl.heter = ddl
+test.heter.mod = predict(zak.mod.heter[[4]], ddl = zak.mod.ddl.heter , se = T)
 
 
 ### PLOT
@@ -165,17 +185,12 @@ label.T = "Heterozygosity"
 
 
 
-test.gg <- ggplot(test.heter.mod$Phi, aes(y = estimate, x = heter)) + 
+test.gg <- ggplot(filter(test.heter.mod$Phi, Flood == 0), aes(y = estimate, x = heter, group = Coh.pflood, lty = Coh.pflood)) + 
   #geom_point(size = size.point,lwd = 4) +
   geom_line(lwd  = line.lwd) + 
   geom_errorbar(aes(ymin = lcl, ymax = ucl),width = 0.01, col = "gray40", lty = 2) + 
-  #ggtitle("Age") +
-  #geom_text(size = size.text) +
-  # ggtitle("Mean Length of 0+ in September") +
-  #geom_text(vjust = 0.4,hjust = -0.4) + 
-  #scale_shape_manual(values=c(16:17), guide = F) +
-  #scale_colour_manual(values = c("gray60","black"), guide = F) +
-  theme(plot.title = element_text(lineheight=.8, face="bold", size = size.title), 
+  ggtitle("Zak") +
+  theme(plot.title = element_text(lineheight=.8, face="bold", size = size.title,hjust = 0.5), 
         plot.background = element_blank()
         ,panel.grid.major = element_blank()
         ,panel.grid.minor = element_blank()
@@ -190,17 +205,14 @@ test.gg <- ggplot(test.heter.mod$Phi, aes(y = estimate, x = heter)) +
         legend.title = element_blank(),
         legend.text = element_text( size = size.legend.text)
   )  +
-  #guides(pch = guide_legend(override.aes = list(size=9)),legend.position = c(0.5,0.5)) +
- # scale_x_continuous() +
-#  scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.2)) +
-  
-  #guides(shape = F) +
+ scale_y_continuous(limits = c(0,1)) +
   labs(y = bquote(phi)) +
   labs(x = label.T)
 
 test.gg
 
-ggsave(file="Plot.zak.surv.heter.pdf", width=11, height=10)
+
+
 
 
 

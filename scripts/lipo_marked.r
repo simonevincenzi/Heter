@@ -14,31 +14,20 @@ rm(data.marked)
 rm(data.prov)
 
 
-annual = 1
+annual = 1 # I had the option of calculating monthly survival with annual = 0
 
 
-
+# clean data
 data_df = arrange(lipo_df, Mark_cor, Year, Month) %>%
   filter(.,!is.na(Mark_cor) & !is.na(Cohort) & Age!=0 & !Sector %in% c("F","G","H","I","J","K") & !is.na(heter) & Year < 2015) 
-
-
-
-#####
-
-minyear= 2006
-maxyear = 2014
-
-rangeofyears = minyear:maxyear
-
-ncolonne = (length(rangeofyears)*2) - 1 # September to September
 
 Cohort.levels = c("C99","C00","C01","C02","C03","C04","C05","C06","C07","C08","C10","C11","C12","C13","C14")
 
 data_df$Cohort <- factor(data_df$Cohort, levels = Cohort.levels)
 
-data$Coh.pflood = rep(0,nrow(data)) # group for cohorts born before and after the flood
+data_df$Coh.pflood = rep(0,nrow(data_df)) # group for cohorts born before and after the flood
 
-# from 2007 on they are after the flood
+# from 2007 on they are after the flood, there were very few fish born between 2008 and 2011
 
 for (i in 1:nrow(data_df)) {
   
@@ -50,6 +39,19 @@ Coh.pflood.levels = c("Pre","Post")
 
 data_df$Coh.pflood = factor(data_df$Coh.pflood,levels = Coh.pflood.levels)
 
+#####
+
+minyear= 2006  # first year of data
+maxyear = 2014 # last year of data
+
+
+## data preparation for marked
+
+rangeofyears = minyear:maxyear
+
+ncolonne = (length(rangeofyears)*2) - 1 # September to September
+
+## columns have month and year
 colonne.names = as.character(c(92006,62007,92007,
                                62008,92008,62009,92009,62010,92010,62011,92011,62012,92012,62013,92013,62014,92014))
 
@@ -59,19 +61,18 @@ colnames(data.marked) = c("id",colonne.names) ## add an id column
 
 data.marked$initial.age = rep(0,nrow(data.marked))  # initial age (1 in June, 1.25 in September)
 
-data.marked$Coh = rep(0,nrow(data.marked)) # Cohort (number)
+data.marked$Coh = rep(0,nrow(data.marked)) # Cohort (as consecutive number)
 
-data.marked$Coh_n = rep(0,nrow(data.marked)) # Cohort (character/factor)
+data.marked$Coh_n = rep(0,nrow(data.marked)) # Cohort (as character/factor)
 
-data.marked$Coh.pflood = rep(0,nrow(data.marked)) 
+data.marked$Coh.pflood = rep(0,nrow(data.marked)) # pre- post-flood Cohorts (as factor)
 
-data.marked$heter = 0
-
+data.marked$heter = 0  # heterozygosity
 
 
 unique.mark.data = with(data_df,unique(Mark_cor)) # unique tagged fish
 
-
+## loop through unique IDs to create the data frame 
 for (i in 1:length(unique.mark.data)) {
   
   data.prov = subset(data_df,Mark_cor == unique.mark.data[i])
@@ -114,9 +115,10 @@ for (i in 1:length(unique.mark.data)) {
   data.marked[i,"id"] = data.prov$Mark_cor[1] # Tag of fish
 }
 
-data.marked = filter(data.marked, id!=0) #data.marked[1:sum(data.marked$id>0),]
+data.marked = filter(data.marked, id!=0) # delete empty rows
 
-dataformerge = data.marked[,2:(ncolonne+1)]
+## merge toghether the columns with presence/absence of fish
+dataformerge = data.marked[,2:(ncolonne+1)] 
 
 dataformerge$ch <- do.call(paste, c(dataformerge, sep=""))
 
@@ -126,6 +128,7 @@ data.marked = data.marked[,-c(2:(ncolonne+1))]
 
 colnames(data.marked)[1] = "Mark"
 
+## Cohort as factors
 data.marked$Coh_n <- factor(data.marked$Coh_n, levels = Cohort.levels)
 data.marked$Coh.pflood <- factor(data.marked$Coh.pflood, levels = Coh.pflood.levels)
 
@@ -146,11 +149,11 @@ colnames(Season)=paste("Season",col.spacebwtime,sep="")
 data.marked=cbind(data.marked,Season)
 
 
-#data.proc=process.data(data.marked,model="CJS",groups=c("Coh","Season"),
-#time.intervals = spacebwtime)
+# Add a Flood time-varying component
+
 flood.rep = rep(0,17)
 
-flood.rep[c(3,7)] = 1
+flood.rep[c(3,7)] = 1 # Flood happend in fall (after September) of 2007 and 2009
 
 Flood=matrix(rep(flood.rep,nrow(data.marked)),ncol=length(flood.rep),byrow=T)
 
@@ -161,7 +164,7 @@ colnames(Flood)=paste("Flood",col.spacebwtime,sep="")
 data.marked=cbind(data.marked,Flood)
 
 
-#####
+##### marked specific objects
 
 design.Phi=list(static=c("Coh_n","Coh.pflood","heter"),time.varying=c("Season","Flood"))
 design.p=list(static=c("Coh_n","Coh.pflood","heter"),time.varying=c("Season","Flood"))
@@ -169,19 +172,24 @@ design.parameters=list(Phi=design.Phi,p=design.p)
 data.proc=process.data(data.marked, model = "CJS", time.interval = spacebwtime)
 ddl=make.design.data(data.proc,parameters=design.parameters)
 
+# fit multiple models
 
 fit.models=function()
 {
+  Phi.dot=list(formula = ~1)
   Phi.Coh=list(formula=~Coh_n)
   Phi.Coh.pflood=list(formula= ~ Coh.pflood)
-  Phi.Coh.pflood.heter.add=list(formula= ~ Coh.pflood + heter + Flood)
-  Phi.Coh.pflood.heter.mult=list(formula= ~ Coh.pflood * heter + Flood)
+  Phi.Coh.pflood.heter.ad=list(formula= ~ Coh.pflood + heter )
+  Phi.Coh.pflood.heter.mult=list(formula= ~ Coh.pflood * heter)
+  Phi.Coh.pflood.heter.flood.ad=list(formula= ~ Coh.pflood + heter + Flood)
+  Phi.Coh.pflood.heter.flood.mu=list(formula= ~ Coh.pflood * heter + Flood)
   Phi.Flood=list(formula=~Flood)
   Phi.Flood.heter.add=list(formula=~Flood + heter)
   Phi.Flood.heter.mult=list(formula=~Flood * heter)
  
-  Phi.Coh.pflood.Flood = list(formula = ~ Coh.pflood + Flood)
-  Phi.dot=list(formula = ~1)
+  Phi.Coh.pflood.Flood.ad = list(formula = ~ Coh.pflood + Flood)
+  Phi.Coh.pflood.Flood.mu = list(formula = ~ Coh.pflood * Flood)
+  
   Phi.Season = list(formula = ~Season)
  
    p.dot=list(formula=~1)
@@ -190,9 +198,9 @@ fit.models=function()
                       external=FALSE,accumulate=FALSE, hessian = T)
   return(results)
 }
-test.heter=fit.models()
-ddl.heter = ddl
-test.heter.mod = predict(test.heter[[8]], ddl = ddl.heter, se = T)
+lipo.heter.mod=fit.models()
+lipo.ddl.mod.heter = ddl
+test.heter.mod = predict(lipo.heter.mod[[11]], ddl = lipo.ddl.mod.heter, se = T)
 
 ### PLOT
 

@@ -4,12 +4,18 @@ library(R2admb)
 library(splines)
 library(dplyr)
 
+
+rm(data_df)
+rm(annual)
+rm(data.marked)
+rm(data.prov)
+
 annual = 1
 
 trebu_df = arrange(trebu_df, Mark_cor, Year, Month)
 
 
-data = filter(trebu_df, !is.na(heter) & !is.na(Mark_cor) & Age_cor>0 & !is.na(Month) &
+data_df = filter(trebu_df, !is.na(heter) & !is.na(Mark_cor) & Age_cor>0 & !is.na(Month) &
                 Year >=2006)
 
 
@@ -17,7 +23,7 @@ data = filter(trebu_df, !is.na(heter) & !is.na(Mark_cor) & Age_cor>0 & !is.na(Mo
 Cohort.levels = c("C98","C99","C00","C01","C02","C03","C04","C05",
                   "C06","C07","C08","C09","C10","C11","C12","C13")
 
-data$Cohort <- factor(data$Cohort, levels = Cohort.levels)
+data_df$Cohort <- factor(data_df$Cohort, levels = Cohort.levels)
 
 minyear= 2006
 maxyear = 2014
@@ -43,11 +49,11 @@ data.marked$Coh_n = rep(0,nrow(data.marked)) # Cohort (character/factor)
 data.marked$heter = 0
 
 
-unique.mark.data = with(data,unique(Mark_cor))  # unique tagged fish
+unique.mark.data = with(data_df,unique(Mark_cor))  # unique tagged fish
 
 for (i in 1:length(unique.mark.data)) { #loop over unique tagged fish
   
-  data.prov = subset(data,Mark_cor == unique.mark.data[i]) ## data relative to the tagged fish
+  data.prov = subset(data_df,Mark_cor == unique.mark.data[i]) ## data relative to the tagged fish
   
   year.prov = data.prov$Year ## years in which the fish was sampled
   
@@ -102,7 +108,7 @@ data.marked$Coh_n <- factor(data.marked$Coh_n, levels = Cohort.levels)
 
 
 if (annual == 0) {  
-  spacebwtime = rep(12,length(unique(data$Year))-1)} else {spacebwtime = rep(1,length(unique(data$Year))-1)}
+  spacebwtime = rep(12,length(unique(data_df$Year))-1)} else {spacebwtime = rep(1,length(unique(data_df$Year))-1)}
 
 #data.marked = assign.vb.par.f(marked.df = data.marked, vb.pred.df = zadla0_noP.synth$pred_vb)
 
@@ -121,42 +127,46 @@ ddl=make.design.data(data.proc,parameters=design.parameters)
 #data.proc=process.data(data.marked,model="CJS",groups="Coh")
 #data.ddl=make.design.data(data.proc)
 
+# fit.models=function()
+# {
+#   Phi.full=list(formula = ~ Coh_n * heter)
+#   p.Coh.=list(formula = ~ Coh_n )
+#   p.time = list(formula = ~ time)
+#   p.time.Coh = list(formula = ~ time + Coh_n)
+#   p.dot = list(formula = ~1)
+#   #p.Age.bs=list(formula=~bs(Age))
+#   cml=create.model.list(c("Phi","p"))
+#   results=crm.wrapper(cml,data=data.proc, ddl=ddl,
+#                       external=FALSE,accumulate=FALSE, hessian = T)
+#   return(results)
+# }
+# trebu.mod.heter=fit.models()
+# trebu.mod.ddl.heter = ddl
+
+
+
 fit.models=function()
 {
-  Phi.dot=list(formula = ~1)
+  Phi.dot=list(formula = ~ 1)
   Phi.int.rel.bs=list(formula = ~bs(heter))
   Phi.int.rel.lm =list(formula = ~ heter)
-  # Phi.int.rel.bs.time=list(formula = ~bs(heter) + time)
-  # Phi.int.rel.lm.time =list(formula = ~ heter + time)
-
-  #Phi.Coh.Flood.Temp.mult=list(formula=~Coh_n*Flood*Temperature)
-  #Phi.Coh.Flood.Temp.add=list(formula=~Coh_n+Flood+Temperature)
-  #Phi.Sex=list(formula=~Sex)
-  #Phi.Sex.Age.mult=list(formula=~Sex*Age)
-  #Phi.Sex.Age.add=list(formula=~Sex+Age)
-  #Phi.linf = list(formula=~linf)
-  #Phi.expL3 = list(formula=~expL3)
-  #Phi.expL2 = list(formula=~expL2)
-  #Phi.expL1 = list(formula=~expL1)
-  #Phi.age=list(formula=~age)
-  #p.dot=list(formula=~1)
-  #p.Density = list(formula = ~ Density)
-  #p.Coh=list(formula=~Coh_n)
-  #p.Flood=list(formula=~Flood)
-  #p.Sex=list(formula=~Sex)
-  #p.time=list(formula=~time)
-  # p.dot=list(formula=~1)
-  p.time = list(formula = ~1)
+  Phi.Coh.het.bs.ad=list(formula = ~ Coh_n + bs(heter))
+  Phi.Coh.int.rel.mu =list(formula = ~ Coh_n * heter)
+  Phi.Coh.=list(formula = ~ Coh_n)
+  
+  
+ 
+  p.time = list(formula = ~ time)
   #p.Age.bs=list(formula=~bs(Age))
   cml=create.model.list(c("Phi","p"))
   results=crm.wrapper(cml,data=data.proc, ddl=ddl,
                       external=FALSE,accumulate=FALSE, hessian = T)
   return(results)
 }
-test.heter=fit.models()
-ddl.heter = ddl
+trebu.mod.heter=fit.models()
+trebu.mod.ddl.heter = ddl
 
-test.heter.mod = predict(test.heter[[5]], ddl = ddl.heter, se = T)
+test.heter.mod = predict(trebu.mod.heter[[6]], ddl = trebu.mod.ddl.heter, se = T)
 
 
 ### PLOT
@@ -180,16 +190,9 @@ colour.line = "gray50"
 label.T = "Heterozygosity" 
 
 
-test.gg <- ggplot(test.heter.mod$Phi, aes(y = estimate, x = heter, group = Flood, col = Flood)) + 
-  #geom_point(size = size.point,lwd = 4) +
+test.gg <- ggplot(test.heter.mod$Phi, aes(y = estimate, x = heter)) + 
   geom_line(lwd  = line.lwd) + 
   geom_errorbar(aes(ymin = lcl, ymax = ucl),width = 0.01, col = "gray40", lty = 2) + 
-  #ggtitle("Age") +
-  #geom_text(size = size.text) +
-  # ggtitle("Mean Length of 0+ in September") +
-  #geom_text(vjust = 0.4,hjust = -0.4) + 
-  #scale_shape_manual(values=c(16:17), guide = F) +
-  #scale_colour_manual(values = c("gray60","black"), guide = F) +
   theme(plot.title = element_text(lineheight=.8, face="bold", size = size.title), 
         plot.background = element_blank()
         ,panel.grid.major = element_blank()
@@ -205,11 +208,7 @@ test.gg <- ggplot(test.heter.mod$Phi, aes(y = estimate, x = heter, group = Flood
         legend.title = element_blank(),
         legend.text = element_text( size = size.legend.text)
   )  +
-  #guides(pch = guide_legend(override.aes = list(size=9)),legend.position = c(0.5,0.5)) +
-  # scale_x_continuous() +
-  #  scale_y_continuous(limits = c(0,1), breaks = seq(0,1,0.2)) +
-  
-  #guides(shape = F) +
+
   labs(y = bquote(phi)) +
   labs(x = label.T)
 
