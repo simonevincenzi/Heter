@@ -4,38 +4,41 @@ library(R2admb)
 library(splines)
 library(dplyr)
 
+# delete some objects that have been potentially used by other scripts
+
 rm(data_df)
 rm(annual)
 rm(data.marked)
 rm(data.prov)
 
-
+# annual or monthly time frame
 
 annual = 1
 
 zadla_df = arrange(zadla_df, Mark_cor, Year, Month)
 
+# filter tag-recapture data, excluding NAs and samples of age 0 (not tagged)
 
 data_df = filter(zadla_df, !is.na(heter) & !is.na(Mark_cor) & Age_cor>0 & !is.na(Month) &
                 Year >=2006)
 
-
+# re-factor Cohort
 
 Cohort.levels = c("C98","C99","C00","C01","C02","C03","C04","C05",
 "C06","C07","C08","C09","C10","C11","C12","C13")
 
 data_df$Cohort <- factor(data_df$Cohort, levels = Cohort.levels)
 
+# first and last year
+
 minyear= 2006
 maxyear = 2014
 
 rangeofyears = minyear:maxyear
 
-ncolonne = (maxyear - minyear) + 1
-#ncolonne corresponds to the number of sampling occasions. 9 in this case
+ncolonne = (maxyear - minyear) + 1 #ncolonne corresponds to the number of sampling occasions. 9 in this case
 
-colonne.names = as.character(minyear:maxyear)
-#colonne.names are the sampling occasions (format yyyy)
+colonne.names = as.character(minyear:maxyear) #colonne.names are the sampling occasions (format yyyy)
 
 data.marked = as.data.frame(matrix(0,10000,(ncolonne+1))) #prepare data.frame for recapture data
 
@@ -47,7 +50,7 @@ data.marked$Coh = rep(0,nrow(data.marked)) # Cohort (number)
 
 data.marked$Coh_n = rep(0,nrow(data.marked)) # Cohort (character/factor)
 
-data.marked$heter = 0
+data.marked$heter = 0 # Heterozygosity
 
 
 unique.mark.data = with(data_df,unique(Mark_cor))  # unique tagged fish
@@ -85,12 +88,14 @@ data.marked[i,"Coh"] = data.prov$Cohort[1] ## Cohort of the fish as number
 
 data.marked[i,"Coh_n"] = as.character(data.prov$Cohort[1]) ## Cohort of the fish as character/factor 
 
-data.marked[i,"heter"] = data.prov$heter[1]
+data.marked[i,"heter"] = data.prov$heter[1] # heterozygosity
 
 data.marked[i,"id"] = data.prov$Mark_cor[1] # Tag of fish
 
 
 }
+
+### I join the columns with the 1/0 for sampled/not sampled
 
 data.marked = filter(data.marked, id!=0) #data.marked[1:sum(data.marked$id>0),]
 
@@ -106,7 +111,7 @@ colnames(data.marked)[1] = "Mark"
 
 data.marked$Coh_n <- factor(data.marked$Coh_n, levels = Cohort.levels)
 
-
+# I need to assign the length of sampling occasions in form of a vector (in years or months). Vector has length number of sampling occasions - 1
 
 if (annual == 0) {  
 spacebwtime = rep(12,length(unique(data_df$Year))-1)} else {spacebwtime = rep(1,length(unique(data_df$Year))-1)}
@@ -123,12 +128,13 @@ if (annual == 0) {
 col.spacebwtime = c(12,cumsum(spacebwtime)+1) } else {col.spacebwtime = c(1,cumsum(spacebwtime)+1)}
 
 colnames(Flood)=paste("Flood",col.spacebwtime,sep="")
+
 # at the end of each column of Flood I need a number starting from 1 indicating the 
 # cumulative time
 
 data.marked=cbind(data.marked,Flood)  # bind the flood dataset
 
-#########
+### create the objects for marked
 
 
 design.Phi=list(static=c("Coh_n","heter"),time.varying=c("Flood"))
@@ -136,6 +142,8 @@ design.p=list(static=c("Coh_n","heter"),time.varying=c("Flood"))
 design.parameters=list(Phi=design.Phi,p=design.p)
 data.proc=process.data(data.marked, model = "CJS", time.interval = spacebwtime)
 ddl=make.design.data(data.proc,parameters=design.parameters)
+
+### Fit survival models (bs is splines)
 
 fit.models=function()
 {
@@ -157,12 +165,12 @@ fit.models=function()
                       external=FALSE,accumulate=FALSE, hessian = T)
   return(results)
 }
-zadla.heter.mod = fit.models()
-zadla.ddl.mod.heter = ddl
-test.heter.mod = predict(zadla.heter.mod[[9]], ddl = zadla.ddl.mod.heter, se = T)
+zadla.heter.mod = fit.models()  # object with models fitted, AIC etc.
+zadla.ddl.mod.heter = ddl # design data
+test.heter.mod = predict(zadla.heter.mod[[9]], ddl = zadla.ddl.mod.heter, se = T) # best model
 
 
-### PLOT
+### PLOT best model
 
 size.title = 20
 line.lwd = 1.2

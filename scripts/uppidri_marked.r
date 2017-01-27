@@ -3,33 +3,42 @@ library(R2admb)
 library(splines)
 library(dplyr)
 
+# delete some objects that have been potentially used by other scripts
+
 rm(data_df)
 rm(annual)
 rm(data.marked)
 rm(data.prov)
+
+# filter data 
 
 data_df = arrange(uppidri_df, Mark_cor, Year, Month) %>%
   filter(., !is.na(Mark_cor) & Mark_cor!="NA" & Cohort_cor!="C15" & Age_cor >=1 & !Mark_cor %in% c("BOTTLE","bottle","Dead") & Length >=115 & !grepl("9472A",Mark_cor) & !grepl("dead",Mark_cor) & !is.na(heter))
 
 
 annual = 1
-basic = 1
 
-#####
+# first and last year
 
 minyear= 2004
 maxyear = 2015
 
 rangeofyears = minyear:maxyear
 
-ncolonne = (length(rangeofyears)*2)  
+ncolonne = (length(rangeofyears)*2)  # ncolonne corresponds to the number of sampling occasions
+
+# re-factor Cohorts
 
 Cohort.levels = c("C96","C97","C98","C99","C00","C01","C02","C03","C04","C05","C06","C07","C08","C09","C10","C11","C12","C13","C14")
 
 data_df$Cohort_cor <- factor(data_df$Cohort_cor, levels = Cohort.levels)
 
+# name of columns with format myyyy
+
 colonne.names = as.character(c(62004,92004,62005,92005,62006,92006,62007,92007,
                                62008,92008,62009,92009,62010,92010,62011,92011,62012,92012,62013,92013,62014,92014,62015,92015))
+
+# prepare data for marked
 
 data.marked = as.data.frame(matrix(0,10000,(ncolonne+1)))
 
@@ -41,13 +50,13 @@ data.marked$Coh = rep(0,nrow(data.marked)) # Cohort (number)
 
 data.marked$Coh_n = rep(0,nrow(data.marked)) # Cohort (character/factor)
 
-data.marked$heter = 0
+data.marked$heter = 0 # Heterozygosity
 
 
 
 unique.mark.data = with(data_df,unique(Mark_cor))
 
-for (i in 1:length(unique.mark.data)) {
+for (i in 1:length(unique.mark.data)) { # loop over unique samples
   
   data.prov = subset(data_df,Mark_cor == unique.mark.data[i])
   
@@ -88,12 +97,13 @@ for (i in 1:length(unique.mark.data)) {
   
   data.marked[i,"Coh_n"] = as.character(data.prov$Cohort_cor[1]) ## Cohort of the fish as character/factor 
   
-  data.marked[i,"heter"] = data.prov$heter[1]
+  data.marked[i,"heter"] = data.prov$heter[1] # Heterozygosity
   
   data.marked[i,"id"] = data.prov$Mark_cor[1] # Tag of fish
   
-  #data.marked[i,"Sex"] = as.character(data.prov$Sex_gen[1])
 }
+
+### I join the columns with the 1/0 for sampled/not sampled
 
 data.marked = filter(data.marked, id!=0) #data.marked[1:sum(data.marked$id>0),]
 
@@ -110,6 +120,7 @@ colnames(data.marked)[1] = "Mark"
 
 data.marked$Coh_n <- factor(data.marked$Coh_n, levels = Cohort.levels)
 
+# space between sampling occasions with two options, annual or monthly
 
 if (annual == 0) {
   spacebwtime = c(3,rep(c(9,3),11))} else if (annual == 1) 
@@ -117,11 +128,10 @@ if (annual == 0) {
     spacebwtime = rep(1,23)}
 
 
-#spacebwtime = rep(1,23)
 # Add Season covariate
 season.rep = c(1,(rep(c(0,1),11)),0)  # 1 is from June to September, 0 from September to June
 # [1] 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0
-season.rep = c("J-S",(rep(c("S-J","J-S"),11)),"S-J")
+season.rep = c("J-S",(rep(c("S-J","J-S"),11)),"S-J") # J is June, S is September
 
 Season=matrix(rep(season.rep,nrow(data.marked)),ncol=length(season.rep),byrow=T)
 
@@ -131,17 +141,15 @@ colnames(Season)=paste("Season",col.spacebwtime,sep="")
 
 data.marked=cbind(data.marked,Season)
 
-### add Spawning
+### create the objects for marked
 
 design.Phi=list(static=c("Coh_n","heter"),time.varying=c("Season")) 
 design.p=list(static=c("Coh_n","heter"),time.varying=c("Season"))
-
-
 design.parameters=list(Phi=design.Phi,p=design.p)
 data.proc=process.data(data.marked, model = "CJS", time.intervals = spacebwtime)
 ddl=make.design.data(data.proc,parameters=design.parameters)
 
-
+### Fit survival models (bs is splines), best recapture model comes from previous work
 
 fit.models=function()
 {
@@ -161,19 +169,19 @@ fit.models=function()
   Phi.Coh.Season.ad = list(formula = ~ Coh_n + Season)
   
   p.Age= list(formula=~bs(Age))
-  ##
+
   cml=create.model.list(c("Phi","p"))
   results=crm.wrapper(cml,data=data.proc, ddl=ddl,
                       external=FALSE,accumulate=FALSE, hessian = T, use.admb = F)
   return(results)
 }
-uppidri.mod.heter=fit.models()
-uppidri.mod.ddl.heter = ddl
+uppidri.mod.heter=fit.models() # marked object with fitted models, AIC etc
+uppidri.mod.ddl.heter = ddl # design data
 
 
-test.heter.mod = predict(uppidri.mod.heter[[8]],ddl = uppidri.mod.ddl.heter,se = T)
-#######
-### PLOT
+test.heter.mod = predict(uppidri.mod.heter[[8]],ddl = uppidri.mod.ddl.heter,se = T) # best model with heterozygosity as predictor
+
+### PLOT the best model
 
 size.title = 20
 line.lwd = 1.2

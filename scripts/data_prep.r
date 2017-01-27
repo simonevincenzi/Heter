@@ -1,11 +1,12 @@
 ### Data preparation for survival and growth
 
 ### Load libraries
+
 library(tidyverse)
 library(readr)
 library(lubridate)
 
-### function to add heterozygosity
+### add_heter.f is a function to add heterozygosity to the tag-recapture data (the heter.f function is in ./scripts/heter.r)
 
 add_heter.f = function(tag_data,geno_data) {
   source("./scripts/heter.r")
@@ -19,18 +20,22 @@ add_heter.f = function(tag_data,geno_data) {
   tag_data$heter = geno_data$heter[match(tag_data$Mark_cor,geno_data$SAMPLE_ID)]
   tag_data$n_loci = geno_data$n_loci[match(tag_data$Mark_cor,geno_data$SAMPLE_ID)]
   
-  return(tag_data)
+  return(tag_data) # it return the tag data with 2 additional columns - heter: expected heterozygosity, - n_loci: number of genotyped loci (varies by sample)
 }
 
 
 
-### Read data
+### Read tag-recapture data, add heterozygosity, changes some formatting
+
+# Lower Idrijca
 
 loidri_df = read_csv("./raw_data/loidri_df_pieced.csv", guess_max = 20000)
 loidri_df$Date = as.Date(loidri_df$Date,format = "%m/%d/%Y") # Y is year with century
 loidri_df = loidri_df %>%
   arrange(.,Mark_cor,Date)
 loidri_df = add_heter.f(loidri_df,read_csv("./raw_data/loidri_genotype_repo.csv"))
+
+# Upper Idrijca
 
 uppidri_df = read_csv("./raw_data/uppidri_df_pieced.csv", guess_max = 20000)
 source("./scripts/correct_uppidri_database.r")
@@ -39,7 +44,7 @@ uppidri_df = uppidri_df %>%
   arrange(.,Mark_cor,Date)
 uppidri_df = add_heter.f(uppidri_df,read_csv("./raw_data/uppidri_genotype_repo.csv"))
 
-
+# Zakojska
 
 zak_df = read_csv("./raw_data/zak_df_pieced.csv", guess_max = 20000)
 zak_df$Date = as.Date(zak_df$Date,format = "%m/%d/%Y") # Y is year with century
@@ -47,17 +52,23 @@ zak_df = zak_df %>%
   arrange(.,Mark_cor,Date)
 zak_df = add_heter.f(zak_df,read_csv("./raw_data/zak_genotype_repo.csv"))
 
+# Trebuscica
+
 trebu_df = read_csv("./raw_data/trebu_df_pieced.csv", guess_max = 20000)
 trebu_df$Date = as.Date(trebu_df$Date,format = "%m/%d/%Y") # Y is year with century
 trebu_df = trebu_df %>%
   arrange(.,Mark_cor,Date)
 trebu_df = add_heter.f(trebu_df,read_csv("./raw_data/trebu_genotype_repo.csv"))
 
+# Zadlascica
+
 zadla_df = read_csv("./raw_data/zadla_df_pieced.csv", guess_max = 20000)
 zadla_df$Date = as.Date(zadla_df$Date,format = "%m/%d/%Y") # Y is year with century
 zadla_df = zadla_df %>%
   arrange(.,Mark_cor,Date)
 zadla_df = add_heter.f(zadla_df,read_csv("./raw_data/zadla_genotype_repo.csv"))
+
+# Lipovscek
 
 lipo_df = read_csv("./raw_data/lipo_df_pieced.csv", guess_max = 20000)
 lipo_df$Date = as.Date(lipo_df$Date,format = "%m/%d/%Y") # Y is year with century
@@ -66,7 +77,11 @@ lipo_df = lipo_df %>%
   arrange(.,Mark_cor,Date)
 lipo_df = add_heter.f(lipo_df,read_csv("./raw_data/lipo_genotype_repo.csv"))
 
-lipo_df %>%
+# Plot showing the distribution of expected heterozygosity
+
+data_heter = zadla_df
+
+data_heter %>%
   filter(.,!is.na(Mark_cor)) %>%
   group_by(Mark_cor) %>%
   summarise(heter_u = mean(heter)) %>%

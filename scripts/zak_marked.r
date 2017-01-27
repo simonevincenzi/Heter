@@ -4,13 +4,16 @@ library(R2admb)
 library(splines)
 library(dplyr)
 
+# delete some objects that have been potentially used by other scripts
+
 rm(data_df)
 rm(annual)
 rm(data.marked)
 rm(data.prov)
 
 annual = 1
-#zak_df = readRDS("zak_df.RDS")
+
+# filter data 
 
 zak_df = arrange(zak_df, Mark_cor, Year, Month)
 
@@ -19,9 +22,9 @@ zak_df$Mark_cor[which(zak_df$Mark_cor == "snakelike")] = zak_df$Mark[which(zak_d
 data_df = filter(zak_df, !is.na(heter))
 
 
-#### Cohort pre and post flood
+#### Cohort pre and post flood (P is parental, i.e. stocking cohort, Pre is pre-flood, Post is post-flood). Later I merge together P and Pre
 
-data_df$Coh.p = ifelse(data_df$Cohort == "P", "P", "O")
+data_df$Coh.p = ifelse(data_df$Cohort == "P", "P", "O") 
 
 Coh.p.levels = c("P","O")
 
@@ -42,18 +45,20 @@ Coh.pflood.levels = c("P","Pre","Post")
 
 data_df$Coh.pflood = factor(data_df$Coh.pflood,levels = Coh.pflood.levels)
 
-levels(data_df$Coh.pflood) = c("Pre","Pre","Post")
+levels(data_df$Coh.pflood) = c("Pre","Pre","Post") # I merge together the parental and pre-cohorts
 
-
+# first and last year
 
 minyear= 1996
 maxyear = 2014
 
-rangeofyears = minyear:maxyear
+rangeofyears = minyear:maxyear 
 
 ncolonne = (maxyear - minyear) + 1    ### number of sampling occasions (19)
 
 colonne.names = as.character(minyear:maxyear)
+
+# prepare data for marked
 
 data.marked = as.data.frame(matrix(0,10000,(ncolonne+1)))
 
@@ -63,12 +68,12 @@ data.marked$initial.age = 0 # initial age
 
 data.marked$Coh = 0 # Cohort (number)
 
-data.marked$heter = 0
+data.marked$heter = 0 # Heterozygosity
 
 
 unique.mark.data = with(data_df,unique(Mark_cor))
 
-for (i in 1:length(unique.mark.data)) {
+for (i in 1:length(unique.mark.data)) { # loop over unique samples
   
   data.prov = subset(data_df,Mark_cor == unique.mark.data[i])
   
@@ -83,18 +88,19 @@ for (i in 1:length(unique.mark.data)) {
   
   data.marked[i,"Coh"] = data.prov$Cohort_cor[1] ## Cohort of the fish as number
   
-  data.marked[i,"Coh_n"] = as.character(data.prov$Cohort_cor[1])
+  # data.marked[i,"Coh_n"] = as.character(data.prov$Cohort_cor[1])
   
   data.marked[i,"Coh.pflood"] = as.character(data.prov$Coh.pflood[1])
   
-  data.marked[i,"heter"] = data.prov$heter[1]
+  data.marked[i,"heter"] = data.prov$heter[1] # Heterozygosity
   
   data.marked[i,"id"] = data.prov$Mark_cor[1] # Tag of fish
   
 }
 
+### I join the columns with the 1/0 for sampled/not sampled
 
-data.marked = filter(data.marked, id!=0) #data.marked[1:sum(data.marked$id>0),]
+data.marked = filter(data.marked, id!=0) 
 
 dataformerge = data.marked[,2:(ncolonne+1)]
 
@@ -106,13 +112,15 @@ data.marked = data.marked[,-c(2:(ncolonne+1))]
 
 colnames(data.marked)[1] = "Mark"
 
+# space between sampling occasions with two options, annual or monthly
+
 if (annual == 0) {
   spacebwtime = rep(12,length(unique(data_df$Year))-1)} else {spacebwtime = rep(1,length(unique(data_df$Year))-1)}
 
 
 col.spacebwtime = c(1,cumsum(spacebwtime)+1)
 
-##add a Flood variable
+## add a Flood variable
 
 flood.rep = rep(0,length(unique(data_df$Year)))
 
@@ -126,17 +134,15 @@ colnames(Flood)=paste("Flood",col.spacebwtime,sep="")
 
 data.marked=cbind(data.marked,Flood)
 
-#####
+### create the objects for marked
 
-design.Phi=list(static=c("heter","Coh_n","Coh.pflood"), time.varying = ("Flood"))
-design.p=list(static=c("heter","Coh_n","Coh.pflood"), time.varying = ("Flood"))
+design.Phi=list(static=c("heter","Coh.pflood"), time.varying = ("Flood"))
+design.p=list(static=c("heter","Coh.pflood"), time.varying = ("Flood"))
 design.parameters=list(Phi=design.Phi,p=design.p)
 data.proc=process.data(data.marked, model = "CJS", time.interval = spacebwtime)
 ddl=make.design.data(data.proc,parameters=design.parameters)
 
-#data.proc=process.data(data.marked,model="CJS",groups="Coh")
-#data.ddl=make.design.data(data.proc)
-
+### Fit survival models (bs is splines), best recapture model comes from previous work
 
 fit.models=function()
 {
@@ -158,12 +164,12 @@ fit.models=function()
                       external=FALSE,accumulate=FALSE, hessian = T,  burnin=1000,iter=5000)
   return(results)
 }
-zak.mod.heter=fit.models()
-zak.mod.ddl.heter = ddl
-test.heter.mod = predict(zak.mod.heter[[4]], ddl = zak.mod.ddl.heter , se = T)
+zak.mod.heter=fit.models() # marked object with fitted models, AIC etc
+zak.mod.ddl.heter = ddl # design data
+test.heter.mod = predict(zak.mod.heter[[4]], ddl = zak.mod.ddl.heter , se = T) # best model
 
 
-### PLOT
+### PLOT the best model
 
 size.title = 20
 line.lwd = 1.2

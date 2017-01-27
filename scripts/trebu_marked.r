@@ -4,39 +4,45 @@ library(R2admb)
 library(splines)
 library(dplyr)
 
+# delete some objects that have been potentially used by other scripts
 
 rm(data_df)
 rm(annual)
 rm(data.marked)
 rm(data.prov)
 
+# annual or monthly time frame
+
 annual = 1
 
 trebu_df = arrange(trebu_df, Mark_cor, Year, Month)
 
+# filter tag-recapture data, excluding NAs and samples of age 0 (not tagged)
 
 data_df = filter(trebu_df, !is.na(heter) & !is.na(Mark_cor) & Age_cor>0 & !is.na(Month) &
                 Year >=2006)
 
-
+# re-factor Cohort
 
 Cohort.levels = c("C98","C99","C00","C01","C02","C03","C04","C05",
                   "C06","C07","C08","C09","C10","C11","C12","C13")
 
 data_df$Cohort <- factor(data_df$Cohort, levels = Cohort.levels)
 
+# first and last year
+
 minyear= 2006
 maxyear = 2014
 
 rangeofyears = minyear:maxyear
 
-ncolonne = (maxyear - minyear) + 1
-#ncolonne corresponds to the number of sampling occasions. 9 in this case
+ncolonne = (maxyear - minyear) + 1 # ncolonne corresponds to the number of sampling occasions. 9 in this case
 
-colonne.names = as.character(minyear:maxyear)
-#colonne.names are the sampling occasions (format yyyy)
+colonne.names = as.character(minyear:maxyear) # colonne.names are the sampling occasions (format yyyy)
 
-data.marked = as.data.frame(matrix(0,10000,(ncolonne+1))) #prepare data.frame for recapture data
+data.marked = as.data.frame(matrix(0,10000,(ncolonne+1))) # prepare data.frame for recapture data
+
+# assign column names
 
 colnames(data.marked) = c("id",colonne.names) #prepare data.frame for recapture data
 
@@ -46,7 +52,7 @@ data.marked$Coh = rep(0,nrow(data.marked)) # Cohort (number)
 
 data.marked$Coh_n = rep(0,nrow(data.marked)) # Cohort (character/factor)
 
-data.marked$heter = 0
+data.marked$heter = 0 # Heterozygosity
 
 
 unique.mark.data = with(data_df,unique(Mark_cor))  # unique tagged fish
@@ -57,12 +63,12 @@ for (i in 1:length(unique.mark.data)) { #loop over unique tagged fish
   
   year.prov = data.prov$Year ## years in which the fish was sampled
   
-  incl.year = rangeofyears %in% year.prov  
+  incl.year = rangeofyears %in% year.prov # sampling occasions (true or false) in which the individual was sampled
   
   data.marked[i,2:(ncolonne+1)] = ifelse(incl.year==F,0,1) # for the tagged fish in the columns
   # of the dataframe I assign 0 if the fish was not sampled, 1 otherwise
   
-  if (annual == 0) {
+  if (annual == 0) { # assign age based on months or years
     
     if (min(subset(data.prov, Year == min(data.prov$Year))$Month) <= 7) { 
       ### check whether the first capture was in June or September (use <= 7 to be sure)
@@ -84,12 +90,14 @@ for (i in 1:length(unique.mark.data)) { #loop over unique tagged fish
   
   data.marked[i,"Coh_n"] = as.character(data.prov$Cohort[1]) ## Cohort of the fish as character/factor 
   
-  data.marked[i,"heter"] = data.prov$heter[1]
+  data.marked[i,"heter"] = data.prov$heter[1] # heterozygosity
   
   data.marked[i,"id"] = data.prov$Mark_cor[1] # Tag of fish
   
   
 }
+
+### I join the columns with the 1/0 for sampled/not sampled
 
 data.marked = filter(data.marked, id!=0) #data.marked[1:sum(data.marked$id>0),]
 
@@ -103,19 +111,17 @@ data.marked = data.marked[,-c(2:(ncolonne+1))]
 
 colnames(data.marked)[1] = "Mark"
 
+###
+
 data.marked$Coh_n <- factor(data.marked$Coh_n, levels = Cohort.levels)
 
-
+# I need to assign the length of sampling occasions in form of a vector (in years or months). Vector has length number of sampling occasions - 1
 
 if (annual == 0) {  
   spacebwtime = rep(12,length(unique(data_df$Year))-1)} else {spacebwtime = rep(1,length(unique(data_df$Year))-1)}
 
-#data.marked = assign.vb.par.f(marked.df = data.marked, vb.pred.df = zadla0_noP.synth$pred_vb)
 
-##add a Flood variable. There was a flood in 2007
-
-
-#########
+### create the objects for marked
 
 
 design.Phi=list(static=c("Coh_n","heter"))
@@ -124,8 +130,7 @@ design.parameters=list(Phi=design.Phi,p=design.p)
 data.proc=process.data(data.marked, model = "CJS", time.interval = spacebwtime)
 ddl=make.design.data(data.proc,parameters=design.parameters)
 
-#data.proc=process.data(data.marked,model="CJS",groups="Coh")
-#data.ddl=make.design.data(data.proc)
+### test best capture model
 
 # fit.models=function()
 # {
@@ -143,7 +148,7 @@ ddl=make.design.data(data.proc,parameters=design.parameters)
 # trebu.mod.heter=fit.models()
 # trebu.mod.ddl.heter = ddl
 
-
+### Fit survival models (bs is splines)
 
 fit.models=function()
 {
@@ -154,22 +159,20 @@ fit.models=function()
   Phi.Coh.int.rel.mu =list(formula = ~ Coh_n * heter)
   Phi.Coh.=list(formula = ~ Coh_n)
   
-  
- 
   p.time = list(formula = ~ time)
-  #p.Age.bs=list(formula=~bs(Age))
+  
   cml=create.model.list(c("Phi","p"))
   results=crm.wrapper(cml,data=data.proc, ddl=ddl,
                       external=FALSE,accumulate=FALSE, hessian = T)
   return(results)
 }
-trebu.mod.heter=fit.models()
-trebu.mod.ddl.heter = ddl
+trebu.mod.heter=fit.models() # object with models fitted, AIC etc.
+trebu.mod.ddl.heter = ddl # design data
 
-test.heter.mod = predict(trebu.mod.heter[[6]], ddl = trebu.mod.ddl.heter, se = T)
+test.heter.mod = predict(trebu.mod.heter[[6]], ddl = trebu.mod.ddl.heter, se = T) # best model
 
 
-### PLOT
+### plot the best model
 
 size.title = 20
 line.lwd = 1.2
