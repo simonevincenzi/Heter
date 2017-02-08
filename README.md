@@ -13,3 +13,7 @@ Tag-recapture and genotyping data are used. Both are in the folder `raw_data`. T
 ## 3. Code
 
 R scripts are in the folder `scripts`. The script `data_prep.r` reads the tag-recapture data and uses genotyping data to assign heterozygosity to each individual with at least 50 loci genotyped. The scripts `NameOfPopulation_marked.r` (e.g., `lipo_marked.r`) prepare data and fit models for tag-recapture analysis of survival using the R package `marked`. The script `Plot_survival_heter.r` plots the relationship heterozygosity-survival for the four populations for which models with heterozygosity were strongly supported and the 3-panel plot in Supplementary Material on the relationhsip between heterozygosity and probability of surviving flash floods. The script `maf.r` calculates the minimum allele frequency for each locus for all populations, along with mean and sd across all loci.
+
+## 4. Manuscript
+
+The manuscript (currently under review) can be [downloaded](http://simonevincenzi.com/Publications/Het_paper_Feb2017_complete.pdf)
